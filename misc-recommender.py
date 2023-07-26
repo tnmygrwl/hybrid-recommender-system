@@ -35,11 +35,7 @@ def sim_distance(prefs,person1,person2):
 
 # Pearson correlation coefficient for p1 and p2
 def sim_pearson(prefs,p1,p2):
-    # Get the list of mutually rated items
-    si={}
-    for item in prefs[p1]:
-        if item in prefs[p2]: si[item]=1
-
+    si = {item: 1 for item in prefs[p1] if item in prefs[p2]}
     #number of similar elements
     n=len(si)
 
@@ -49,33 +45,27 @@ def sim_pearson(prefs,p1,p2):
 
     #PCC = COV(A,B)/ SD(A)*SD(B)
     #COV(A,B)= E(A.B) - E(A).E(B)   ->for a random variable, if each outcome is equally probable(ie., 1/n) then Expected value= MEAN
-    
-    sumA=sum([prefs[p1][it] for it in si])
-    sumB=sum([prefs[p2][it] for it in si])
-    pSum=sum([prefs[p1][it]*prefs[p2][it] for it in si]) #productsum(A.B)
-    
-    sumASq=sum([pow(prefs[p1][it],2) for it in si])
-    sumBSq=sum([pow(prefs[p2][it],2) for it in si])
-    
+
+    sumA = sum(prefs[p1][it] for it in si)
+    sumB = sum(prefs[p2][it] for it in si)
+    pSum = sum(prefs[p1][it]*prefs[p2][it] for it in si)
+
+    sumASq = sum(pow(prefs[p1][it],2) for it in si)
+    sumBSq = sum(pow(prefs[p2][it],2) for it in si)
+        
 
     COV=float(pSum-sumA*sumB)/(n)
     SDA=float(sumASq-pow(sumA,2))/(n)
     SDB=float(sumBSq-pow(sumB,2))/(n)
 
-    if SDA==0 or SDB==0 or COV==0: return 0.01
-         
-    pcc=COV/(SDA*SDB)
-    return pcc
+    return 0.01 if SDA==0 or SDB==0 or COV==0 else COV/(SDA*SDB)
 
 #Find top n similar tupples, for a given tupple
 def topMatches(prefs,similarity,person,n):
-    scores=[]
-    for p in prefs:
-        if p != person:
-            scores.append([similarity(prefs,p,person),p])
+    scores = [[similarity(prefs,p,person),p] for p in prefs if p != person]
     scores.sort()
     scores.reverse()
-    return scores[0:n]
+    return scores[:n]
 
 #Find top n similar tupples, for each tupple
 def SimilarItems(Table,n):      #Table = 2D dictionary like userFeatureTable
@@ -90,7 +80,6 @@ def SimilarItems(Table,n):      #Table = 2D dictionary like userFeatureTable
 def getUserBased(prefs,similarity,person): 
     wtsum={}    #weighted sum   
     simsum={}   #similarity sum
-    scores={}
     for p in prefs:
         if p==person: continue
         sim=similarity(prefs,p,person)      #Find similarity score of given user with every other user
@@ -102,11 +91,7 @@ def getUserBased(prefs,similarity,person):
             wtsum[it]+=sim*prefs[p][it]
             simsum[it]+=sim
 
-    #Normalize (weighted average)
-    for it in wtsum:         
-        if simsum[it]!=0:   scores[it] = wtsum[it]/simsum[it]
-        else: scores[it]=0
-    return scores
+    return {it: wtsum[it]/simsum[it] if simsum[it]!=0 else 0 for it in wtsum}
 
 #-------------------------------------------------------
 #Transform-> Now each tupple/entity represents an item.
@@ -121,31 +106,25 @@ def transformPrefs(prefs):
 def calculateItemBasedRecom(prefs,SimItems,user):
     wtsum={}
     simsum={}
-    scores={}
-    for it in prefs[user]:           #movies rated by the user
-        if it=='age'or it=='sex': continue
+    for it in prefs[user]:       #movies rated by the user
+        if it in ['age', 'sex']: continue
         for sit in SimItems[it]:     #similar items list [similarity score,movie]
             if sit[1] in prefs[user]: continue
             if sit[1] not in wtsum: wtsum[sit[1]]=0.0
             if sit[1] not in simsum: simsum[sit[1]]=0.0
             wtsum[sit[1]]+=sit[0]*prefs[user][it]
             simsum[sit[1]]+=sit[0]
-        
-    for it in wtsum:
-        if simsum[it]!=0:   scores[it] = wtsum[it]/simsum[it]
-        else: scores[it]=0
-    return scores
+
+    return {it: wtsum[it]/simsum[it] if simsum[it]!=0 else 0 for it in wtsum}
 
 def getItemBased(prefs,user,n):
     itemPrefs=transformPrefs(prefs)         #People who liked X also liked Y
     SimItems=SimilarItems(itemPrefs,n)
-    scores=calculateItemBasedRecom(prefs,SimItems,user)
-    return scores
+    return calculateItemBasedRecom(prefs,SimItems,user)
 
 def getContentBased(prefs, itemtags, user, n):
     SimItems=SimilarItems(itemtags,n)
-    scores=calculateItemBasedRecom(prefs,SimItems,user)
-    return scores
+    return calculateItemBasedRecom(prefs,SimItems,user)
 
 #-------------------------------------------------------
 def getscoredlist(prefs, itemtags, user):
@@ -215,65 +194,80 @@ class MainPage(webapp2.RequestHandler):
 
 class Submit(webapp2.RequestHandler):
   def post(self):
-    name1=cgi.escape(self.request.get('u_name'))
-    age1=cgi.escape(self.request.get('age'))
-    sex1=cgi.escape(self.request.get('sex'))
-    movie1=cgi.escape(self.request.get('m_name'))
-    rating1=cgi.escape(self.request.get('rating'))
+      name1=cgi.escape(self.request.get('u_name'))
+      age1=cgi.escape(self.request.get('age'))
+      sex1=cgi.escape(self.request.get('sex'))
+      movie1=cgi.escape(self.request.get('m_name'))
+      rating1=cgi.escape(self.request.get('rating'))
 
-    logging.info(name1+' '+age1+' '+sex1+' '+movie1+' '+rating1+'\n')
+      logging.info(f'{name1} {age1} {sex1} {movie1} {rating1}' + '\n')
 
-    name1='_'.join(name1.split())
-    
-    if name1=='username' or movie1=='from above list' or rating1=='out of 5' or age1=='age in years' or sex1=='sex':
-        self.response.out.write('<h3>No Field should be empty</h3>')
-        return
+      name1='_'.join(name1.split())
 
-    itemtags=table2_to_dic()
-    if float(age1)>100 or float(age1)<0 or float(rating1) >5 or float(rating1)<0 or (movie1 not in itemtags):
-        self.response.out.write('<b><h2>Invalid entry!</h2></b>')
-        return
+      if name1=='username' or movie1=='from above list' or rating1=='out of 5' or age1=='age in years' or sex1=='sex':
+          self.response.out.write('<h3>No Field should be empty</h3>')
+          return
 
-    try:
-        element=Critic(key_name=name1+'age', name=name1, feature='age' ,value=float(age1))
-        element.put()
-        element=Critic(key_name=name1+'sex', name=name1, feature='sex', value=float(sex1))
-        element.put()
-        element=Critic(key_name=name1+movie1, name=name1, feature=movie1, value=float(rating1))
-        element.put()
-        self.response.out.write('<b><h2>Entry successfull!</h2></b>')
-    except:
-        self.response.out.write('<b><h2>Could not enter data</h2></b>')
+      itemtags=table2_to_dic()
+      if float(age1)>100 or float(age1)<0 or float(rating1) >5 or float(rating1)<0 or (movie1 not in itemtags):
+          self.response.out.write('<b><h2>Invalid entry!</h2></b>')
+          return
+
+      try:
+          element = Critic(
+              key_name=f'{name1}age',
+              name=name1,
+              feature='age',
+              value=float(age1),
+          )
+          element.put()
+          element = Critic(
+              key_name=f'{name1}sex',
+              name=name1,
+              feature='sex',
+              value=float(sex1),
+          )
+          element.put()
+          element=Critic(key_name=name1+movie1, name=name1, feature=movie1, value=float(rating1))
+          element.put()
+          self.response.out.write('<b><h2>Entry successfull!</h2></b>')
+      except:
+          self.response.out.write('<b><h2>Could not enter data</h2></b>')
 
 class get_recommendations(webapp2.RequestHandler):  
   def post(self):
-    self.response.out.write('<html><body bgcolor="white"><b><h2>Recommendations</h2></b><pre>')
-    user=cgi.escape(self.request.get('u_name'))
-    prefs=table1_to_dic()
-    itemtags=table2_to_dic()
-    if user not in prefs:
-        self.response.out.write('<b>Invalid username!</b>')
-        return
+      self.response.out.write('<html><body bgcolor="white"><b><h2>Recommendations</h2></b><pre>')
+      user=cgi.escape(self.request.get('u_name'))
+      prefs=table1_to_dic()
+      itemtags=table2_to_dic()
+      if user not in prefs:
+          self.response.out.write('<b>Invalid username!</b>')
+          return
 
-    scores=getscoredlist(prefs,itemtags,user)      #{ m1: .94, m2: .34}
-    rankedresults=sorted([(score,movie) for (movie, score) in scores.items()], reverse=1)
-    for i in range(4):
-        self.response.out.write(str(rankedresults[i][0])+' '+rankedresults[i][1]+'\n')
-    self.response.out.write('</pre></body></html>')    
+      scores=getscoredlist(prefs,itemtags,user)      #{ m1: .94, m2: .34}
+      rankedresults=sorted([(score,movie) for (movie, score) in scores.items()], reverse=1)
+      for i in range(4):
+          self.response.out.write(
+              f'{str(rankedresults[i][0])} {rankedresults[i][1]}' + '\n'
+          )
+      self.response.out.write('</pre></body></html>')    
 
 class View_ratings(webapp2.RequestHandler):  
   def post(self):
-    self.response.out.write('<html><body bgcolor="white"><b><h2>Profile</h2></b><pre>')
-    user=cgi.escape(self.request.get('u_name'))
-    prefs=table1_to_dic()
-    if user not in prefs:
-        self.response.out.write('<b>Invalid username!</b>')
-        return
-    for f in prefs[user]:
-        if f=='sex':
-            if prefs[user][f]==0: self.response.out.write(f+'  '+'Male'+'\n')
-            else: self.response.out.write(f+'  '+'Female'+'\n')
-        else: self.response.out.write(f+'  '+str(prefs[user][f])+'\n')
+      self.response.out.write('<html><body bgcolor="white"><b><h2>Profile</h2></b><pre>')
+      user=cgi.escape(self.request.get('u_name'))
+      prefs=table1_to_dic()
+      if user not in prefs:
+          self.response.out.write('<b>Invalid username!</b>')
+          return
+      for f in prefs[user]:
+          if f=='sex':
+              if prefs[user][f]==0:
+                  self.response.out.write(f'{f}  Male' + '\n')
+              else:          else
+                  self.response.out.write(f'{f}  Female' + '\n')
+          else:      else
+              self.response.out.write(f'{f}  {str(prefs[user][f])}' + '\n')
                 
 app1 = webapp2.WSGIApplication([('/', MainPage),('/sub', Submit)],
                               debug=True)
